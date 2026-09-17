@@ -1,1 +1,5 @@
+name: Notificar Discord sobre nova release
 
+"on":
+  release:
+    types: [published]
