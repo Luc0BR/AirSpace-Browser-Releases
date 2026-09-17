@@ -1,5 +1,64 @@
 name: Notificar Discord sobre nova release
 
+# Este workflow roda automaticamente sempre que uma release e publicada
+# neste repositorio (AirSpace-Browser-Releases), incluindo releases
+# marcadas como "pre-release" (testes/bugfixes).
 "on":
   release:
     types: [published]
+
+jobs:
+  notify-discord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enviar mensagem para o Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # Monta o texto das notas de release, com fallback caso esteja vazio
+          NOTES="${RELEASE_BODY}"
+          if [ -z "$NOTES" ]; then
+            NOTES="Sem notas de versao desta vez."
+          fi
+
+          # Trunca as notas para caber no limite de campo do Discord (1024 chars)
+          NOTES="${NOTES:0:1000}"
+
+          # Define o titulo conforme for release normal ou pre-release (teste)
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            TITLE="AirSpace atualizado (teste/bugfix)"
+            COLOR=15105570
+          else
+            TITLE="AirSpace foi atualizado!"
+            COLOR=3066993
+          fi
+
+          # Monta o payload JSON do embed do Discord
+          PAYLOAD=$(cat <<EOF
+          {
+            "embeds": [
+              {
+                "title": "${TITLE}",
+                "description": "**Versao:** ${RELEASE_TAG}\n\n${NOTES}",
+                "url": "${RELEASE_URL}",
+                "color": ${COLOR},
+                "fields": [
+                  {
+                    "name": "Download",
+                    "value": "[Clique aqui para baixar](${RELEASE_URL})"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          curl -H "Content-Type: application/json" \
+               -d "$PAYLOAD" \
+               "$DISCORD_WEBHOOK_URL"
